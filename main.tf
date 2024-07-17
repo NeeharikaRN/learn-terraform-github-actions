@@ -50,10 +50,34 @@ resource "aws_instance" "web" {
   root_block_device {
     encrypted   = true
   }
+  subnet_id              = aws_subnet.subnet.id
+  key_name               = var.key_name
+}
+
+variable "private_key_path"{
+  type = string
+  default = "./Neeharika_Terraform.pem"
+}
+variable "key_name" {
+  type = string
+ description = "key name"
+ default = "Neeharika_Terraform"
+}
+variable "region" {
+  type    = string
+  default = "eu-west-1"
+  description = "Name of the region to create resource"
+}
+variable "network_address_space" {
+  default = "10.1.0.0/16"
+}
+variable "subnet_address_space" {
+  default = "10.1.0.0/24"
 }
 
 resource "aws_security_group" "web-sg" {
   name = "${random_pet.sg.id}-sg"
+  vpc_id = aws_vpc.vpc.id
 
   # SSH access from anywhere
   ingress {
@@ -74,7 +98,41 @@ resource "aws_security_group" "web-sg" {
   # outbound internet access
 }
 
+resource "aws_vpc" "vpc" {
+  cidr_block           = var.network_address_space
+  enable_dns_hostnames = "true"
 
+}
+
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.vpc.id
+
+}
+
+resource "aws_subnet" "subnet" {
+  cidr_block              = var.subnet_address_space
+  vpc_id                  = aws_vpc.vpc.id
+  map_public_ip_on_launch = "true"
+  availability_zone       = data.aws_availability_zones.available.names[0]
+
+}
+
+# ROUTING #
+resource "aws_route_table" "rtb" {
+  vpc_id = aws_vpc.vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+}
+
+resource "aws_route_table_association" "rta-subnet" {
+  subnet_id      = aws_subnet.subnet.id
+  route_table_id = aws_route_table.rtb.id
+}
+
+data "aws_availability_zones" "available" {}
 
 output "web-address" {
   value = "${aws_instance.web.public_dns}:8080"
